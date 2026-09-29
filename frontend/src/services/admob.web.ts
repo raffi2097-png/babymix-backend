@@ -17,6 +17,26 @@ export function setNonPersonalizedAds(_v: boolean): void {
   return;
 }
 
+export type UmpResult = {
+  canRequestAds: boolean;
+  personalized: boolean;
+  privacyOptionsRequired: boolean;
+  error?: string;
+};
+
+export async function requestUmpConsent(): Promise<UmpResult> {
+  return {
+    canRequestAds: true,
+    personalized: false,
+    privacyOptionsRequired: false,
+    error: "native_sdk_unavailable",
+  };
+}
+
+export async function showPrivacyOptionsForm(): Promise<{ ok: boolean; error?: string }> {
+  return { ok: false, error: "native_sdk_unavailable" };
+}
+
 export function isAdMobAvailable(): boolean {
   return false;
 }

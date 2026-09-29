@@ -31,11 +31,86 @@ export type RewardedAdResult = { earnedReward: boolean; error?: string };
 let nonPersonalized = false;
 
 /**
- * Called by the ATT flow. When the user denies tracking, AdMob requests must
- * be flagged `requestNonPersonalizedAdsOnly=true` (Apple + Google policy).
+ * Called by the ATT / UMP flow. When the user denies tracking or GDPR
+ * personalization, AdMob requests must be flagged
+ * `requestNonPersonalizedAdsOnly=true` (Apple + Google policy).
  */
 export function setNonPersonalizedAds(v: boolean) {
   nonPersonalized = v;
+}
+
+export type UmpResult = {
+  canRequestAds: boolean;
+  personalized: boolean;
+  privacyOptionsRequired: boolean;
+  error?: string;
+};
+
+/**
+ * Google UMP (User Messaging Platform) GDPR flow.
+ *   1. requestInfoUpdate → fetches the latest consent state from AdMob console
+ *   2. loadAndShowConsentFormIfRequired → shows the official Google GDPR form
+ *      when required (users in EEA / UK, or debug=EEA)
+ *   3. reads canRequestAds + user choices to decide personalization
+ */
+export async function requestUmpConsent(): Promise<UmpResult> {
+  if (!sdk) {
+    return { canRequestAds: true, personalized: false, privacyOptionsRequired: false, error: "native_sdk_unavailable" };
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("react-native-google-mobile-ads");
+    const AdsConsent = mod.AdsConsent;
+    const AdsConsentDebugGeography = mod.AdsConsentDebugGeography;
+
+    await AdsConsent.requestInfoUpdate({
+      // Force the EEA experience while testing on any device. Remove this line
+      // (or set to DISABLED) for production.
+      debugGeography: __DEV__ ? AdsConsentDebugGeography.EEA : AdsConsentDebugGeography.DISABLED,
+      tagForUnderAgeOfConsent: false,
+    });
+
+    await AdsConsent.loadAndShowConsentFormIfRequired();
+
+    const info = await AdsConsent.getConsentInfo();
+    let personalized = true;
+    try {
+      const choices = await AdsConsent.getUserChoices();
+      // If the user declined personalized ads storage / measurement, request NPA.
+      personalized = !!(choices?.storeAndAccessInformationOnDevice && choices?.selectPersonalisedAds);
+    } catch {
+      personalized = false;
+    }
+
+    return {
+      canRequestAds: !!info?.canRequestAds,
+      personalized,
+      privacyOptionsRequired: info?.privacyOptionsRequirementStatus === "required",
+    };
+  } catch (e: any) {
+    return {
+      canRequestAds: true,
+      personalized: false,
+      privacyOptionsRequired: false,
+      error: e?.message ?? "ump_failed",
+    };
+  }
+}
+
+/** Shows the "Manage consent" form so the user can edit their GDPR choice. */
+export async function showPrivacyOptionsForm(): Promise<{ ok: boolean; error?: string }> {
+  if (!sdk) return { ok: false, error: "native_sdk_unavailable" };
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("react-native-google-mobile-ads");
+    await mod.AdsConsent.showPrivacyOptionsForm();
+    // Refresh personalization flag after the user edited their choices.
+    const refreshed = await requestUmpConsent();
+    setNonPersonalizedAds(!refreshed.personalized);
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "form_failed" };
+  }
 }
 
 // Best-effort dynamic import so the module is not required at bundle time in

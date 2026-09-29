@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Ionicons from "@react-native-vector-icons/ionicons";
 
 import ConsentGate from "@/src/components/consent-gate";
+import { showPrivacyOptionsForm } from "@/src/services/admob";
 import { usePremiumState } from "@/src/services/premium";
 import { babyStore } from "@/src/store";
 import { makeStyles, radius, spacing, useTheme } from "@/src/theme";
@@ -110,6 +111,15 @@ export default function WelcomeScreen() {
           testID="privacy-link"
         >
           <Text style={styles.footerLinkText}>Privacy Policy · Termini</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            showPrivacyOptionsForm();
+          }}
+          style={styles.footerLink}
+          testID="manage-consent-link"
+        >
+          <Text style={styles.footerLinkText}>Gestisci consenso pubblicitario</Text>
         </Pressable>
       </View>
 
