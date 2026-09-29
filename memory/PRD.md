@@ -20,8 +20,18 @@ App mobile Expo (italiano) che genera il possibile figlio (2-5 anni) da due foto
 - Bottone acquisto simulato (1,2s) → flip a Premium
 - Ripristina acquisti
 
-## Placeholder integrazioni (pronte allo swap)
-- `src/services/admob.ts` — `ADMOB_CONFIG` con app IDs placeholder + `showRewardedAd()` no-op. Commenti con istruzioni per `react-native-google-mobile-ads`.
+## AdMob reale (Rewarded Video)
+- Package: `react-native-google-mobile-ads@17.2.0`
+- Config plugin in `app.json` con:
+  - iOS App ID: `ca-app-pub-9867075377824700~3097681401` (utente) → `Info.plist GADApplicationIdentifier` iniettato automaticamente dal plugin
+  - Android App ID: `ca-app-pub-3940256099942544~3347511713` (test Google, da sostituire)
+  - Android Rewarded Ad Unit ID: `ca-app-pub-9867075377824700/7900164526` (utente)
+  - iOS Rewarded Ad Unit ID: test Google `ca-app-pub-3940256099942544/1712485313` (da sostituire con quello reale con `/`)
+- `src/services/admob.ts` chiama `RewardedAd.createForAdRequest → load → show → EARNED_REWARD`
+- `src/services/admob.web.ts` shim automatico per web/Expo Go (Metro seleziona il file `.web.ts`)
+- `_layout.tsx` chiama `initAdMob()` all'avvio (`mobileAds().initialize()`)
+- Se la SDK nativa non è disponibile (Expo Go / anteprima web) resta il countdown simulato di 30s → generation
+- La vera Rewarded Video funziona SOLO su build nativa (Publish → Generate iOS build)
 - `src/services/payments.ts` — `PLANS`, `purchase()`, `restorePurchases()` simulati. Commenti con istruzioni per Stripe checkout (backend) o `react-native-iap`.
 - `src/services/premium.ts` — persistenza consenso + premium via AsyncStorage.
 

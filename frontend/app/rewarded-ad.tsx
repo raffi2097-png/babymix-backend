@@ -12,7 +12,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ADMOB_CONFIG } from "@/src/services/admob";
+import { ADMOB_CONFIG, isAdMobAvailable, showRewardedAd } from "@/src/services/admob";
 import { makeStyles, radius, spacing, useTheme } from "@/src/theme";
 
 const AD_DURATION = ADMOB_CONFIG.simulatedDurationSec;
@@ -23,7 +23,12 @@ export default function RewardedAdScreen() {
   const styles = useStyles();
   const { colors } = useTheme();
   const [remaining, setRemaining] = useState(AD_DURATION);
+  const [status, setStatus] = useState<"loading-ad" | "simulating" | "done" | "error">(
+    isAdMobAvailable() ? "loading-ad" : "simulating",
+  );
+  const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const abortedRef = useRef(false);
 
   const pulse = useSharedValue(0);
   const shine = useSharedValue(0);
@@ -33,12 +38,40 @@ export default function RewardedAdScreen() {
     shine.value = withRepeat(withTiming(1, { duration: 2400, easing: Easing.linear }), -1, false);
   }, [pulse, shine]);
 
+  // Real AdMob path
   useEffect(() => {
+    if (!isAdMobAvailable()) return;
+    let cancelled = false;
+    (async () => {
+      const res = await showRewardedAd();
+      if (cancelled || abortedRef.current) return;
+      if (res.earnedReward) {
+        setStatus("done");
+        setTimeout(() => router.replace("/generating"), 200);
+      } else {
+        setStatus("error");
+        setError(
+          res.error === "closed_before_reward"
+            ? "Hai chiuso il video prima della fine. Guarda l'annuncio per intero per ricevere la generazione gratuita."
+            : `Impossibile mostrare l'annuncio (${res.error ?? "ignoto"}). Riprova o passa a Premium.`,
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  // Simulated fallback path (Expo Go / web)
+  useEffect(() => {
+    if (status !== "simulating") return;
     intervalRef.current = setInterval(() => {
       setRemaining((r) => {
         if (r <= 1) {
           if (intervalRef.current) clearInterval(intervalRef.current);
-          setTimeout(() => router.replace("/generating"), 250);
+          setTimeout(() => {
+            if (!abortedRef.current) router.replace("/generating");
+          }, 250);
           return 0;
         }
         return r - 1;
@@ -47,7 +80,13 @@ export default function RewardedAdScreen() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [router]);
+  }, [router, status]);
+
+  useEffect(() => {
+    return () => {
+      abortedRef.current = true;
+    };
+  }, []);
 
   const progress = 1 - remaining / AD_DURATION;
 
@@ -55,7 +94,6 @@ export default function RewardedAdScreen() {
     transform: [{ scale: 1 + pulse.value * 0.06 }],
     opacity: 0.9 + pulse.value * 0.1,
   }));
-
   const shineStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: -200 + shine.value * 500 }],
   }));
@@ -64,6 +102,12 @@ export default function RewardedAdScreen() {
     if (intervalRef.current) clearInterval(intervalRef.current);
     router.replace("/paywall");
   };
+
+  const onRetry = () => {
+    router.replace("/rewarded-ad");
+  };
+
+  const showSimulator = status === "simulating" || status === "loading-ad";
 
   return (
     <View style={styles.root} testID="rewarded-ad-screen">
@@ -75,45 +119,73 @@ export default function RewardedAdScreen() {
         <View style={styles.adTag} testID="ad-tag">
           <Text style={styles.adTagText}>ANNUNCIO</Text>
         </View>
-        <View style={styles.counter} testID="ad-counter">
-          <Ionicons name="time" size={14} color="#FFF" />
-          <Text style={styles.counterText}>{remaining}s</Text>
-        </View>
+        {status === "simulating" ? (
+          <View style={styles.counter} testID="ad-counter">
+            <Ionicons name="time" size={14} color="#FFF" />
+            <Text style={styles.counterText}>{remaining}s</Text>
+          </View>
+        ) : status === "loading-ad" ? (
+          <View style={styles.counter} testID="ad-counter">
+            <Ionicons name="cloud-download" size={14} color="#FFF" />
+            <Text style={styles.counterText}>Caricamento…</Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.center}>
-        <Animated.View style={[styles.videoFrame, pulseStyle]}>
-          <LinearGradient
-            colors={["#FFB7C5", "#D198E5", "#F3E8FF"]}
-            style={StyleSheet.absoluteFill}
-          />
-          <Animated.View style={[styles.shine, shineStyle]}>
-            <LinearGradient
-              colors={["transparent", "rgba(255,255,255,0.6)", "transparent"]}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={StyleSheet.absoluteFill}
-            />
-          </Animated.View>
-          <View style={styles.videoContent}>
-            <View style={styles.playIcon}>
-              <Ionicons name="videocam" size={44} color="#5C2B80" />
-            </View>
-            <Text style={styles.videoTitle}>Video pubblicitario</Text>
-            <Text style={styles.videoSub}>
-              Guarda per sbloccare la generazione gratuita
-            </Text>
-          </View>
-        </Animated.View>
+        {showSimulator ? (
+          <>
+            <Animated.View style={[styles.videoFrame, pulseStyle]}>
+              <LinearGradient
+                colors={["#FFB7C5", "#D198E5", "#F3E8FF"]}
+                style={StyleSheet.absoluteFill}
+              />
+              <Animated.View style={[styles.shine, shineStyle]}>
+                <LinearGradient
+                  colors={["transparent", "rgba(255,255,255,0.6)", "transparent"]}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              </Animated.View>
+              <View style={styles.videoContent}>
+                <View style={styles.playIcon}>
+                  <Ionicons name="videocam" size={44} color="#5C2B80" />
+                </View>
+                <Text style={styles.videoTitle}>
+                  {status === "loading-ad" ? "Caricamento annuncio…" : "Video pubblicitario"}
+                </Text>
+                <Text style={styles.videoSub}>
+                  {status === "loading-ad"
+                    ? "Sto contattando Google AdMob"
+                    : "Guarda per sbloccare la generazione gratuita"}
+                </Text>
+              </View>
+            </Animated.View>
 
-        <View style={styles.progressWrap}>
-          <View style={styles.progressBg}>
-            <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+            {status === "simulating" ? (
+              <View style={styles.progressWrap}>
+                <View style={styles.progressBg}>
+                  <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+                </View>
+                <Text style={styles.progressLabel}>
+                  {remaining > 0 ? `Ancora ${remaining} secondi…` : "Ricompensa sbloccata! ✨"}
+                </Text>
+              </View>
+            ) : null}
+          </>
+        ) : (
+          <View style={styles.errorCard}>
+            <View style={styles.errorIcon}>
+              <Ionicons name="alert" size={32} color="#FFF" />
+            </View>
+            <Text style={styles.errorTitle}>Annuncio non completato</Text>
+            <Text style={styles.errorText}>{error}</Text>
+            <Pressable style={styles.retryBtn} onPress={onRetry} testID="rewarded-retry">
+              <Text style={styles.retryText}>Riprova</Text>
+            </Pressable>
           </View>
-          <Text style={styles.progressLabel}>
-            {remaining > 0 ? `Ancora ${remaining} secondi…` : "Ricompensa sbloccata! ✨"}
-          </Text>
-        </View>
+        )}
       </View>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.lg }]}>
@@ -191,6 +263,31 @@ const useStyles = makeStyles(() => ({
     borderRadius: radius.pill,
   },
   progressLabel: { color: "#FFF", fontSize: 13, fontWeight: "700", textAlign: "center" },
+  errorCard: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  errorIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.pill,
+    backgroundColor: "#EF9A9A",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorTitle: { color: "#FFF", fontSize: 18, fontWeight: "800", textAlign: "center" },
+  errorText: { color: "#F3E8FF", fontSize: 13, textAlign: "center", lineHeight: 20 },
+  retryBtn: {
+    marginTop: spacing.md,
+    backgroundColor: "#FFB7C5",
+    paddingVertical: 14,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.pill,
+  },
+  retryText: { color: "#4A1525", fontWeight: "800", fontSize: 14 },
   footer: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
   upgradeBtn: {
     flexDirection: "row",

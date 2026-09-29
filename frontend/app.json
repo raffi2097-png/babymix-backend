@@ -9,14 +9,19 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.babygenerator.f8fa1r"
+      "bundleIdentifier": "com.emergent.babygenerator.f8fa1r",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Serve per scegliere le foto dei genitori",
+        "NSUserTrackingUsageDescription": "Per mostrarti annunci più pertinenti in cambio del generatore gratuito"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.emergent.babygenerator.f8fa1r"
+      "package": "com.emergent.babygenerator.f8fa1r",
+      "permissions": ["com.google.android.gms.permission.AD_ID"]
     },
     "web": {
       "bundler": "metro",
@@ -39,7 +44,23 @@
       "expo-secure-store",
       "expo-web-browser",
       "expo-status-bar",
-      "@react-native-vector-icons/ionicons"
+      [
+        "react-native-google-mobile-ads",
+        {
+          "iosAppId": "ca-app-pub-9867075377824700~3097681401",
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "userTrackingUsageDescription": "Per mostrarti annunci più pertinenti in cambio del generatore gratuito",
+          "delayAppMeasurementInit": true,
+          "optimizeInitialization": true,
+          "optimizeAdLoading": true
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": { "useFrameworks": "static" }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

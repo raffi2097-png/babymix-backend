@@ -1,35 +1,146 @@
-// Placeholder module for Google AdMob Rewarded Video integration.
-// Ready to be swapped with `react-native-google-mobile-ads` in the future.
+// Google AdMob Rewarded Video integration.
 //
-// Future integration steps (do NOT implement yet, only wired UI):
-//   1. yarn expo install react-native-google-mobile-ads
-//   2. app.json plugin config with Android + iOS app IDs from AdMob console
-//   3. Replace `showRewardedAd()` body with:
-//        import mobileAds, { RewardedAd, RewardedAdEventType, TestIds } from "react-native-google-mobile-ads";
-//        const adUnitId = __DEV__ ? TestIds.REWARDED : "ca-app-pub-XXXX/YYYY";
-//        const rewarded = RewardedAd.createForAdRequest(adUnitId);
-//        Await load event, call rewarded.show(), resolve on EARNED_REWARD.
+// The Expo preview and Expo Go DO NOT include the native `react-native-google-mobile-ads`
+// module. To keep the app runnable in these environments we lazy-import the SDK
+// inside a try/catch and fall back to a purely UI simulation when it's missing.
 //
-// For now this simulates a 30-second Rewarded Video via the /rewarded-ad screen.
+// Full ads run only after: Publish → Deploy → Generate iOS/Android build.
+
+import { Platform } from "react-native";
 
 export const ADMOB_CONFIG = {
-  androidAppId: "ca-app-pub-0000000000000000~0000000000",
-  iosAppId: "ca-app-pub-0000000000000000~0000000000",
-  rewardedAdUnitId: "ca-app-pub-0000000000000000/0000000000",
-  simulatedDurationSec: 30,
+  // iOS App ID provided by the user (goes into Info.plist GADApplicationIdentifier via the config plugin).
+  iosAppId: "ca-app-pub-9867075377824700~3097681401",
+
+  // ⚠️ Android App ID not yet provided by the user — using Google's official
+  // Android test App ID. Replace once the real one is created in AdMob.
+  androidAppId: "ca-app-pub-3940256099942544~3347511713",
+
+  // ⚠️ iOS Rewarded Ad Unit ID not yet provided by the user (they supplied the
+  // App ID again). Falls back to Google's official iOS Rewarded test unit.
+  iosRewardedAdUnitId: "ca-app-pub-3940256099942544/1712485313",
+
+  // Android Rewarded Ad Unit ID provided by the user.
+  androidRewardedAdUnitId: "ca-app-pub-9867075377824700/7900164526",
+
+  simulatedDurationSec: 30, // used only when the native SDK is unavailable (Expo Go / web)
 };
 
-export async function initAdMob(): Promise<void> {
-  // no-op placeholder; real init: await mobileAds().initialize();
-  return;
+export type RewardedAdResult = { earnedReward: boolean; error?: string };
+
+// Best-effort dynamic import so the module is not required at bundle time in
+// environments where it isn't installed natively.
+function loadSdk():
+  | null
+  | {
+      RewardedAd: any;
+      RewardedAdEventType: any;
+      AdEventType: any;
+      TestIds: any;
+      mobileAds: any;
+    } {
+  if (Platform.OS === "web") return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("react-native-google-mobile-ads");
+    return {
+      RewardedAd: mod.RewardedAd,
+      RewardedAdEventType: mod.RewardedAdEventType,
+      AdEventType: mod.AdEventType,
+      TestIds: mod.TestIds,
+      mobileAds: mod.default ?? mod.mobileAds,
+    };
+  } catch {
+    return null; // native module absent (Expo Go)
+  }
 }
 
-// Placeholder that resolves with `earnedReward=true` once the simulated video
-// has been fully watched. In production replace with the real SDK.
-export type RewardedAdResult = { earnedReward: boolean };
+const sdk = loadSdk();
 
+export function isAdMobAvailable(): boolean {
+  return sdk !== null;
+}
+
+export async function initAdMob(): Promise<void> {
+  if (!sdk) return;
+  try {
+    await sdk.mobileAds().initialize();
+  } catch {
+    // swallow — initialization can be retried when we actually show an ad
+  }
+}
+
+function getAdUnitId(): string | null {
+  if (!sdk) return null;
+  if (__DEV__) return sdk.TestIds.REWARDED;
+  return Platform.OS === "ios"
+    ? ADMOB_CONFIG.iosRewardedAdUnitId
+    : ADMOB_CONFIG.androidRewardedAdUnitId;
+}
+
+/**
+ * Loads and shows a Google AdMob Rewarded Ad, resolving true only when the
+ * user earns the reward. Resolves with `earnedReward:false` (and an error) if
+ * the native module is unavailable — the caller should then fall back to the
+ * simulated timer UI.
+ */
 export async function showRewardedAd(): Promise<RewardedAdResult> {
-  // The actual "watch" is handled by the /rewarded-ad screen. This function
-  // stays for API parity with the future SDK swap.
-  return { earnedReward: true };
+  if (!sdk) {
+    return { earnedReward: false, error: "native_sdk_unavailable" };
+  }
+
+  const adUnitId = getAdUnitId();
+  if (!adUnitId) {
+    return { earnedReward: false, error: "no_ad_unit_id" };
+  }
+
+  return new Promise<RewardedAdResult>((resolve) => {
+    let settled = false;
+    let earned = false;
+    const rewarded = sdk.RewardedAd.createForAdRequest(adUnitId, {
+      requestNonPersonalizedAdsOnly: false,
+    });
+
+    const cleanup = () => {
+      try {
+        unsubLoaded?.();
+        unsubEarned?.();
+        unsubClosed?.();
+        unsubError?.();
+      } catch {}
+    };
+
+    const finish = (result: RewardedAdResult) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(result);
+    };
+
+    const unsubLoaded = rewarded.addAdEventListener(sdk.RewardedAdEventType.LOADED, () => {
+      try {
+        rewarded.show();
+      } catch (e: any) {
+        finish({ earnedReward: false, error: e?.message ?? "show_failed" });
+      }
+    });
+
+    const unsubEarned = rewarded.addAdEventListener(sdk.RewardedAdEventType.EARNED_REWARD, () => {
+      earned = true;
+    });
+
+    const unsubClosed = rewarded.addAdEventListener(sdk.AdEventType.CLOSED, () => {
+      finish({ earnedReward: earned, error: earned ? undefined : "closed_before_reward" });
+    });
+
+    const unsubError = rewarded.addAdEventListener(sdk.AdEventType.ERROR, (err: any) => {
+      finish({ earnedReward: false, error: err?.message ?? "ad_error" });
+    });
+
+    try {
+      rewarded.load();
+    } catch (e: any) {
+      finish({ earnedReward: false, error: e?.message ?? "load_failed" });
+    }
+  });
 }
