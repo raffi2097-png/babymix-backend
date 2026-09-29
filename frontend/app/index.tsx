@@ -5,6 +5,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Ionicons from "@react-native-vector-icons/ionicons";
 
+import ConsentGate from "@/src/components/consent-gate";
+import { usePremiumState } from "@/src/services/premium";
 import { babyStore } from "@/src/store";
 import { makeStyles, radius, spacing, useTheme } from "@/src/theme";
 
@@ -16,6 +18,7 @@ export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { colors } = useTheme();
+  const premium = usePremiumState();
 
   const onStart = () => {
     babyStore.reset();
@@ -34,10 +37,16 @@ export default function WelcomeScreen() {
           <Ionicons name="heart" size={14} color={colors.brandSecondary} />
           <Text style={styles.badgeText}>BabyMix</Text>
         </View>
+        {premium.isPremium ? (
+          <View style={[styles.premiumBadge, { top: insets.top + spacing.lg }]} testID="premium-badge">
+            <Ionicons name="star" size={12} color={colors.onBrandPrimary} />
+            <Text style={styles.premiumBadgeText}>Premium</Text>
+          </View>
+        ) : null}
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.body, { paddingBottom: spacing["3xl"] + 80 }]}
+        contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 220 }]}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.title} testID="welcome-title">
@@ -53,9 +62,40 @@ export default function WelcomeScreen() {
           <Feature icon="sparkles" label="AI magica" />
           <Feature icon="happy" label="Realistico" />
         </View>
+
+        {!premium.isPremium ? (
+          <Pressable
+            onPress={() => router.push("/paywall")}
+            style={({ pressed }) => [styles.premiumCta, pressed && { transform: [{ scale: 0.98 }] }]}
+            testID="premium-cta"
+          >
+            <LinearGradient
+              colors={[colors.brandPrimary, colors.brandSecondary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.premiumGradient}
+            >
+              <View style={styles.premiumIconWrap}>
+                <Ionicons name="star" size={20} color={colors.onBrandPrimary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.premiumTitle}>Passa a Premium</Text>
+                <Text style={styles.premiumSub}>Rimuovi Pubblicità · HD · illimitato</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={22} color={colors.onBrandPrimary} />
+            </LinearGradient>
+          </Pressable>
+        ) : (
+          <View style={styles.premiumActive} testID="premium-active-card">
+            <Ionicons name="checkmark-circle" size={22} color={colors.success} />
+            <Text style={styles.premiumActiveText}>
+              Sei Premium — generazioni illimitate senza pubblicità.
+            </Text>
+          </View>
+        )}
       </ScrollView>
 
-      <View style={[styles.ctaWrap, { paddingBottom: insets.bottom + spacing.lg }]}>
+      <View style={[styles.ctaWrap, { paddingBottom: insets.bottom + spacing.md }]}>
         <Pressable
           onPress={onStart}
           style={({ pressed }) => [styles.cta, pressed && { transform: [{ scale: 0.97 }] }]}
@@ -64,7 +104,16 @@ export default function WelcomeScreen() {
           <Text style={styles.ctaText}>Inizia</Text>
           <Ionicons name="arrow-forward" size={20} color={colors.onBrandPrimary} />
         </Pressable>
+        <Pressable
+          onPress={() => router.push("/privacy")}
+          style={styles.footerLink}
+          testID="privacy-link"
+        >
+          <Text style={styles.footerLinkText}>Privacy Policy · Termini</Text>
+        </Pressable>
       </View>
+
+      <ConsentGate />
     </View>
   );
 }
@@ -84,7 +133,7 @@ function Feature({ icon, label }: { icon: string; label: string }) {
 
 const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
-  heroWrap: { height: 380, width: "100%" },
+  heroWrap: { height: 340, width: "100%" },
   hero: { width: "100%", height: "100%" },
   heroScrim: { position: "absolute", left: 0, right: 0, bottom: 0, top: 0 },
   badge: {
@@ -104,19 +153,31 @@ const useStyles = makeStyles((colors) => ({
     elevation: 3,
   },
   badgeText: { color: colors.onSurface, fontWeight: "700", fontSize: 13, letterSpacing: 0.5 },
+  premiumBadge: {
+    position: "absolute",
+    right: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.brandPrimary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+  },
+  premiumBadgeText: { color: colors.onBrandPrimary, fontWeight: "800", fontSize: 11, letterSpacing: 0.5 },
   body: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
   title: {
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: "800",
     color: colors.onSurface,
-    lineHeight: 40,
+    lineHeight: 38,
     letterSpacing: -0.5,
   },
   subtitle: {
     marginTop: spacing.md,
-    fontSize: 16,
+    fontSize: 15,
     color: colors.muted,
-    lineHeight: 24,
+    lineHeight: 22,
   },
   featureRow: {
     marginTop: spacing.xl,
@@ -147,6 +208,45 @@ const useStyles = makeStyles((colors) => ({
     marginBottom: spacing.sm,
   },
   featureLabel: { color: colors.onSurface, fontSize: 13, fontWeight: "600" },
+  premiumCta: {
+    marginTop: spacing.xl,
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    shadowColor: colors.brandPrimary,
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  premiumGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+  },
+  premiumIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(255,255,255,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  premiumTitle: { color: colors.onBrandPrimary, fontWeight: "800", fontSize: 16 },
+  premiumSub: { color: colors.onBrandPrimary, opacity: 0.85, fontSize: 12, marginTop: 2 },
+  premiumActive: {
+    marginTop: spacing.xl,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    borderWidth: 1.5,
+    borderColor: colors.success,
+  },
+  premiumActiveText: { flex: 1, color: colors.onSurface, fontWeight: "700", fontSize: 14 },
   ctaWrap: {
     position: "absolute",
     left: 0,
@@ -154,7 +254,7 @@ const useStyles = makeStyles((colors) => ({
     bottom: 0,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
-    backgroundColor: "rgba(255,249,250,0.85)",
+    backgroundColor: "rgba(255,249,250,0.9)",
   },
   cta: {
     backgroundColor: colors.brandPrimary,
@@ -171,4 +271,6 @@ const useStyles = makeStyles((colors) => ({
     elevation: 6,
   },
   ctaText: { color: colors.onBrandPrimary, fontSize: 17, fontWeight: "800", letterSpacing: 0.3 },
+  footerLink: { alignItems: "center", paddingVertical: spacing.md },
+  footerLinkText: { color: colors.muted, fontSize: 12, textDecorationLine: "underline" },
 }));

@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { usePremiumState } from "@/src/services/premium";
 import { babyStore, type Gender } from "@/src/store";
 import { makeStyles, radius, spacing, useTheme } from "@/src/theme";
 
@@ -28,6 +29,7 @@ export default function UploadScreen() {
   const [motherUri, setMotherUri] = useState<string | null>(babyStore.get().motherImageUri);
   const [gender, setGender] = useState<Gender>(babyStore.get().gender);
   const [error, setError] = useState<string | null>(null);
+  const premium = usePremiumState();
 
   const pickImage = async (kind: ParentKind) => {
     setError(null);
@@ -71,7 +73,11 @@ export default function UploadScreen() {
       return;
     }
     babyStore.setGender(gender);
-    router.push("/generating");
+    if (premium.isPremium) {
+      router.push("/generating");
+    } else {
+      router.push("/rewarded-ad");
+    }
   };
 
   return (
@@ -158,7 +164,9 @@ export default function UploadScreen() {
           testID="generate-button"
         >
           <Ionicons name="sparkles" size={20} color={colors.onBrandPrimary} />
-          <Text style={styles.ctaText}>Genera</Text>
+          <Text style={styles.ctaText}>
+            {premium.isPremium ? "Genera" : "Genera (guarda annuncio)"}
+          </Text>
         </Pressable>
       </View>
     </View>
