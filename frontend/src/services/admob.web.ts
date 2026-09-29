@@ -13,6 +13,10 @@ export const ADMOB_CONFIG = {
 
 export type RewardedAdResult = { earnedReward: boolean; error?: string };
 
+export function setNonPersonalizedAds(_v: boolean): void {
+  return;
+}
+
 export function isAdMobAvailable(): boolean {
   return false;
 }

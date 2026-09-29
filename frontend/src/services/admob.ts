@@ -28,6 +28,16 @@ export const ADMOB_CONFIG = {
 
 export type RewardedAdResult = { earnedReward: boolean; error?: string };
 
+let nonPersonalized = false;
+
+/**
+ * Called by the ATT flow. When the user denies tracking, AdMob requests must
+ * be flagged `requestNonPersonalizedAdsOnly=true` (Apple + Google policy).
+ */
+export function setNonPersonalizedAds(v: boolean) {
+  nonPersonalized = v;
+}
+
 // Best-effort dynamic import so the module is not required at bundle time in
 // environments where it isn't installed natively.
 function loadSdk():
@@ -98,7 +108,7 @@ export async function showRewardedAd(): Promise<RewardedAdResult> {
     let settled = false;
     let earned = false;
     const rewarded = sdk.RewardedAd.createForAdRequest(adUnitId, {
-      requestNonPersonalizedAdsOnly: false,
+      requestNonPersonalizedAdsOnly: nonPersonalized,
     });
 
     const cleanup = () => {

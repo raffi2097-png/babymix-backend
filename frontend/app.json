@@ -21,7 +21,9 @@
         "backgroundColor": "#000000"
       },
       "package": "com.emergent.babygenerator.f8fa1r",
-      "permissions": ["com.google.android.gms.permission.AD_ID"]
+      "permissions": [
+        "com.google.android.gms.permission.AD_ID"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -45,6 +47,12 @@
       "expo-web-browser",
       "expo-status-bar",
       [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "Per mostrarti annunci più pertinenti in cambio del generatore gratuito"
+        }
+      ],
+      [
         "react-native-google-mobile-ads",
         {
           "iosAppId": "ca-app-pub-9867075377824700~3097681401",
@@ -58,9 +66,12 @@
       [
         "expo-build-properties",
         {
-          "ios": { "useFrameworks": "static" }
+          "ios": {
+            "useFrameworks": "static"
+          }
         }
-      ]
+      ],
+      "expo-tracking-transparency"
     ],
     "experiments": {
       "typedRoutes": true
