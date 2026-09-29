@@ -1,7 +1,8 @@
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Ionicons from "@react-native-vector-icons/ionicons";
 
@@ -20,10 +21,24 @@ export default function WelcomeScreen() {
   const styles = useStyles();
   const { colors } = useTheme();
   const premium = usePremiumState();
+  const [consentModal, setConsentModal] = useState<null | "unavailable" | "error">(null);
+  const [consentError, setConsentError] = useState<string | null>(null);
 
   const onStart = () => {
     babyStore.reset();
     router.push("/upload");
+  };
+
+  const onManageConsent = async () => {
+    const res = await showPrivacyOptionsForm();
+    if (!res.ok) {
+      if (res.error === "native_sdk_unavailable") {
+        setConsentModal("unavailable");
+      } else {
+        setConsentError(res.error ?? "Errore imprevisto");
+        setConsentModal("error");
+      }
+    }
   };
 
   return (
@@ -113,10 +128,9 @@ export default function WelcomeScreen() {
           <Text style={styles.footerLinkText}>Privacy Policy · Termini</Text>
         </Pressable>
         <Pressable
-          onPress={() => {
-            showPrivacyOptionsForm();
-          }}
-          style={styles.footerLink}
+          onPress={onManageConsent}
+          style={({ pressed }) => [styles.footerLink, pressed && { opacity: 0.6 }]}
+          hitSlop={12}
           testID="manage-consent-link"
         >
           <Text style={styles.footerLinkText}>Gestisci consenso pubblicitario</Text>
@@ -124,6 +138,42 @@ export default function WelcomeScreen() {
       </View>
 
       <ConsentGate />
+
+      <Modal
+        visible={consentModal !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConsentModal(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet} testID="consent-info-modal">
+            <View style={styles.modalIcon}>
+              <Ionicons
+                name={consentModal === "unavailable" ? "information-circle" : "alert"}
+                size={26}
+                color={colors.onBrandPrimary}
+              />
+            </View>
+            <Text style={styles.modalTitle}>
+              {consentModal === "unavailable"
+                ? "Disponibile nell'app installata"
+                : "Impossibile aprire il consenso"}
+            </Text>
+            <Text style={styles.modalBody}>
+              {consentModal === "unavailable"
+                ? "Il popup GDPR di Google si apre sulla build iOS/Android reale. Nell'anteprima web e in Expo Go la SDK AdMob non è caricata, quindi il pulsante non fa nulla di visibile — funzionerà appena installi la build nativa."
+                : (consentError ?? "")}
+            </Text>
+            <Pressable
+              onPress={() => setConsentModal(null)}
+              style={styles.modalCta}
+              testID="consent-info-close"
+            >
+              <Text style={styles.modalCtaText}>Ho capito</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -265,6 +315,8 @@ const useStyles = makeStyles((colors) => ({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
     backgroundColor: "rgba(255,249,250,0.9)",
+    zIndex: 10,
+    elevation: 10,
   },
   cta: {
     backgroundColor: colors.brandPrimary,
@@ -281,6 +333,53 @@ const useStyles = makeStyles((colors) => ({
     elevation: 6,
   },
   ctaText: { color: colors.onBrandPrimary, fontSize: 17, fontWeight: "800", letterSpacing: 0.3 },
-  footerLink: { alignItems: "center", paddingVertical: spacing.md },
+  footerLink: { alignItems: "center", paddingVertical: spacing.sm + 2 },
   footerLinkText: { color: colors.muted, fontSize: 12, textDecorationLine: "underline" },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(61,28,42,0.55)",
+    justifyContent: "center",
+    padding: spacing.lg,
+  },
+  modalSheet: {
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    alignItems: "center",
+    shadowColor: "#3D1C2A",
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
+  },
+  modalIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandPrimary,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.md,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: colors.onSurface,
+    textAlign: "center",
+    marginBottom: spacing.sm,
+  },
+  modalBody: {
+    fontSize: 14,
+    color: colors.onSurfaceSecondary,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: spacing.lg,
+  },
+  modalCta: {
+    backgroundColor: colors.brandPrimary,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: 12,
+  },
+  modalCtaText: { color: colors.onBrandPrimary, fontWeight: "800", fontSize: 14 },
 }));
