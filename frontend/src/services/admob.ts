@@ -210,12 +210,30 @@ export async function showRewardedAd(): Promise<RewardedAdResult> {
       }
     });
 
-    const unsubEarned = rewarded.addAdEventListener(sdk.RewardedAdEventType.EARNED_REWARD, () => {
-      earned = true;
-    });
+    // EARNED_REWARD is the authoritative "user watched the ad" signal from
+    // Google. Resolve the promise here immediately — the native rewarded
+    // overlay stays visible until the user dismisses it, so navigating
+    // underneath is safe.
+    const unsubEarned = rewarded.addAdEventListener(
+      sdk.RewardedAdEventType.EARNED_REWARD,
+      () => {
+        earned = true;
+        finish({ earnedReward: true });
+      },
+    );
 
+    // CLOSED can fire BEFORE EARNED_REWARD on iOS. Give the reward event a
+    // short grace window before deciding the user bailed out.
     const unsubClosed = rewarded.addAdEventListener(sdk.AdEventType.CLOSED, () => {
-      finish({ earnedReward: earned, error: earned ? undefined : "closed_before_reward" });
+      if (settled) return;
+      setTimeout(() => {
+        if (!settled) {
+          finish({
+            earnedReward: earned,
+            error: earned ? undefined : "closed_before_reward",
+          });
+        }
+      }, 800);
     });
 
     const unsubError = rewarded.addAdEventListener(sdk.AdEventType.ERROR, (err: any) => {
